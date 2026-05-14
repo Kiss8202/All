@@ -383,9 +383,9 @@ delete_all_nodes() {
     echo -e "  ${COLOR_YELLOW}此操作将删除所有节点配置，不可恢复！${COLOR_RESET}"
     echo ""
     
-    read -rp "  请输入 'DELETE' 确认删除全部节点: " confirm
+    read -rp "  确认删除全部节点? (y/n): " confirm
     
-    if [[ "$confirm" == "DELETE" ]]; then
+    if [[ "$confirm" =~ ^[Yy]$ ]]; then
         # 停止服务
         systemctl stop sing-box 2>/dev/null || true
         
@@ -394,6 +394,9 @@ delete_all_nodes() {
         
         # 删除证书
         rm -rf "${PATH_CONFIG}/certs"
+        
+        # 删除协议信息
+        rm -f "${PATH_CONFIG}"/*_info.json
         
         log_info "所有节点已删除"
         
@@ -470,9 +473,9 @@ uninstall_all() {
     echo -e "  ${COLOR_YELLOW}此操作将完全卸载 Sing-box 及所有配置！${COLOR_RESET}"
     echo ""
     
-    read -rp "  请输入 'UNINSTALL' 确认完全卸载: " confirm
+    read -rp "  确认完全卸载? (y/n): " confirm
     
-    if [[ "$confirm" == "UNINSTALL" ]]; then
+    if [[ "$confirm" =~ ^[Yy]$ ]]; then
         log_info "正在卸载 Sing-box..."
         
         # 停止并禁用服务

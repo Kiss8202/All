@@ -5,10 +5,12 @@
 ## 特性
 
 - ✅ **模块化设计** - 每个协议独立脚本，便于扩展
+- ✅ **交互式配置** - 安装时可自定义端口和伪装域名
 - ✅ **高安全性** - 使用最高安全等级的密码生成
 - ✅ **双栈支持** - 自动生成 IPv4/IPv6 双节点链接
 - ✅ **资源占用小** - 支持 Debian 和 Alpine 系统
 - ✅ **易于管理** - 安装、卸载、查看、日志一站式管理
+- ✅ **快捷命令** - 支持 `sb` 快捷命令快速启动
 
 ## 支持的协议
 
@@ -19,10 +21,17 @@
 
 ## 快速开始
 
-### 安装
+### 一键安装
 
 ```bash
 bash <(curl -fsSL https://raw.githubusercontent.com/Kiss8202/All/main/main.sh)
+```
+
+### 安装快捷命令 (推荐)
+
+```bash
+bash <(curl -fsSL https://raw.githubusercontent.com/Kiss8202/All/main/install-sb.sh)
+sb  # 启动管理脚本
 ```
 
 ### 手动运行
@@ -54,17 +63,23 @@ sudo ./main.sh
 - Reality 协议 (TCP，最高安全性)
 - Hysteria2 协议 (UDP，高性能)
 
+安装时可以自定义：
+- 端口 (默认: Reality 443 / Hysteria2 8443)
+- 伪装域名 (默认: icloud.cdn-apple.com / bing.com)
+- 是否启用混淆 (Hysteria2)
+
 ### 查看节点信息
 
 - 查看节点详情和分享链接
-- 删除单个节点
-- 删除全部节点
+- 删除单个节点 (确认提示已简化为 y/n)
+- 删除全部节点 (确认提示已简化为 y/n)
 
 ## 目录结构
 
 ```
 All/
 ├── main.sh              # 主菜单入口
+├── install-sb.sh        # 安装 sb 快捷命令
 ├── modules/
 │   ├── common.sh        # 通用工具函数
 │   ├── reality.sh       # Reality 协议模块

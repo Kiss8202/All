@@ -641,3 +641,54 @@ EOF
     
     log_info "系统优化完成"
 }
+
+# ============================================
+# 协议信息管理
+# ============================================
+
+# 保存协议信息
+save_protocol_info() {
+    local protocol=$1
+    shift
+    local info=($@)
+    
+    local info_file="${PATH_CONFIG}/${protocol}_info.json"
+    mkdir -p "$(dirname "$info_file")"
+    
+    echo "${info[@]}" > "$info_file"
+}
+
+# 删除协议信息
+delete_protocol_info() {
+    local protocol=$1
+    local info_file="${PATH_CONFIG}/${protocol}_info.json"
+    
+    if [[ -f "$info_file" ]]; then
+        rm -f "$info_file"
+        log_info "协议信息已删除"
+    fi
+}
+
+# ============================================
+# 辅助函数
+# ============================================
+
+# 简化的确认提示
+confirm_action() {
+    local message="$1"
+    echo ""
+    read -rp "$message (y/n): " confirm
+    if [[ "$confirm" =~ ^[Yy]$ ]]; then
+        return 0
+    fi
+    return 1
+}
+
+# 别名函数名兼容性
+generate_password() {
+    generate_secure_password
+}
+
+create_selfsigned_cert() {
+    create_self_signed_cert
+}

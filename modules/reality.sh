@@ -153,8 +153,8 @@ reality_uninstall() {
     # 获取端口信息
     local port=$(jq -r '.inbounds[] | select(.tag=="vless-reality-in") | .listen_port' "$PATH_CONFIG_FILE" 2>/dev/null || echo "443")
     
-    # 移除 inbound 配置
-    remove_inbound_from_config "vless-reality-in"
+    # 移除 inbound 配置 - 传协议名而不是tag
+    remove_inbound_from_config "reality"
     
     # 关闭防火墙端口
     close_port "$port" "tcp"
