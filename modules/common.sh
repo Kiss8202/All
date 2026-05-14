@@ -153,19 +153,23 @@ install_singbox() {
     mkdir -p "$install_dir" "$config_dir"
     
     # 获取最新版本 - 使用多种方式
+    local tag_name=""
     local version=""
     log_info "获取 Sing-box 最新版本..."
     
     # 方式1: GitHub API
-    if [[ -z "$version" ]]; then
-        version=$(curl -fsSL --connect-timeout 10 "https://api.github.com/repos/SagerNet/sing-box/releases/latest" 2>/dev/null | grep -o '"tag_name": "v[^"]*"' | head -1 | awk -F'"' '{print $4}' || true)
+    if [[ -z "$tag_name" ]]; then
+        tag_name=$(curl -fsSL --connect-timeout 10 "https://api.github.com/repos/SagerNet/sing-box/releases/latest" 2>/dev/null | grep -o '"tag_name": "v[^"]*"' | head -1 | awk -F'"' '{print $4}' || true)
     fi
     
     # 方式2: 使用固定版本（如果API失败）
-    if [[ -z "$version" ]]; then
-        log_warn "无法获取最新版本，使用备用版本 v1.8.6"
-        version="v1.8.6"
+    if [[ -z "$tag_name" ]]; then
+        log_warn "无法获取最新版本，使用备用版本 v1.12.12"
+        tag_name="v1.12.12"
     fi
+    
+    # 文件名里用不带 v 的版本号
+    version=${tag_name#v}
     
     # 修复架构名称 (Sing-box 使用 amd64 而非 x86_64)
     local sb_arch="$arch"
@@ -175,13 +179,13 @@ install_singbox() {
         sb_arch="arm64"
     fi
     
-    log_info "正在下载 Sing-box $version ($sb_arch)..."
+    log_info "正在下载 Sing-box $tag_name ($sb_arch)..."
     
     # 下载地址列表（多个备用）
     local download_urls=(
-        "https://github.com/SagerNet/sing-box/releases/download/${version}/sing-box-${version}-linux-${sb_arch}.tar.gz"
-        "https://download.fastgit.org/SagerNet/sing-box/releases/download/${version}/sing-box-${version}-linux-${sb_arch}.tar.gz"
-        "https://ghproxy.com/https://github.com/SagerNet/sing-box/releases/download/${version}/sing-box-${version}-linux-${sb_arch}.tar.gz"
+        "https://github.com/SagerNet/sing-box/releases/download/${tag_name}/sing-box-${version}-linux-${sb_arch}.tar.gz"
+        "https://download.fastgit.org/SagerNet/sing-box/releases/download/${tag_name}/sing-box-${version}-linux-${sb_arch}.tar.gz"
+        "https://ghproxy.com/https://github.com/SagerNet/sing-box/releases/download/${tag_name}/sing-box-${version}-linux-${sb_arch}.tar.gz"
     )
     
     # 下载并安装
@@ -224,7 +228,7 @@ install_singbox() {
         # 创建服务文件
         create_systemd_service
         
-        log_info "Sing-box $version 安装成功"
+        log_info "Sing-box $tag_name 安装成功"
     else
         log_error "文件解压失败"
         rm -rf "$tmp_dir"
