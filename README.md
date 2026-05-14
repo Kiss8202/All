@@ -22,14 +22,14 @@
 ### 安装
 
 ```bash
-bash <(curl -fsSL https://raw.githubusercontent.com/narwhal-cloud/sing-box-node/main/main.sh)
+bash <(curl -fsSL https://raw.githubusercontent.com/Kiss8202/All/main/main.sh)
 ```
 
 ### 手动运行
 
 ```bash
-git clone https://github.com/narwhal-cloud/sing-box-node.git
-cd sing-box-node
+git clone https://github.com/Kiss8202/All.git
+cd All
 chmod +x main.sh
 sudo ./main.sh
 ```
@@ -63,7 +63,7 @@ sudo ./main.sh
 ## 目录结构
 
 ```
-sing-box-node/
+All/
 ├── main.sh              # 主菜单入口
 ├── modules/
 │   ├── common.sh        # 通用工具函数
