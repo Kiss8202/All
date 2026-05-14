@@ -5,9 +5,7 @@
 #
 
 # 协议配置
-readonly HYSTERIA2_TAG="hysteria2-in"
-readonly HYSTERIA2_PORT=8443
-readonly HYSTERIA2_MASQUERADE="https://bing.com"
+readonly HY2_TAG="hysteria2-in"
 
 # ============================================
 # Hysteria2 协议安装
@@ -25,63 +23,126 @@ hysteria2_install() {
     init_main_config
     
     # 生成配置参数
-    local password=$(generate_secure_password)
+    local password=$(generate_password 32)
     local obfs_password=$(generate_obfs_password)
     
-    # 检查端口
-    local port=$HYSTERIA2_PORT
-    if ! check_port_available "$port"; then
-        log_warn "端口 $port 已被占用，尝试查找可用端口..."
-        port=$(get_available_port 8443 100)
-        if [[ -z "$port" ]]; then
+    # 询问端口配置
+    echo ""
+    echo -e "${COLOR_CYAN}══════════════════════════════════════════════════════${COLOR_RESET}"
+    echo -e "  ${COLOR_GREEN}端口配置${COLOR_RESET}"
+    echo -e "${COLOR_CYAN}══════════════════════════════════════════════════════${COLOR_RESET}"
+    echo -e "  默认端口: ${COLOR_YELLOW}8443${COLOR_RESET}"
+    read -rp "  请输入端口 (直接回车使用默认 8443): " HY2_PORT_INPUT
+    
+    # 如果用户输入了端口，使用用户输入的，否则使用默认值
+    local final_port="${HY2_PORT_INPUT:-8443}"
+    
+    # 验证端口
+    if ! [[ "$final_port" =~ ^[0-9]+$ ]] || [ "$final_port" -lt 1 ] || [ "$final_port" -gt 65535 ]; then
+        log_error "端口无效，使用默认端口 8443"
+        final_port=8443
+    fi
+    
+    # 检查端口是否可用
+    if ! check_port_available "$final_port"; then
+        log_warn "端口 $final_port 已被占用，尝试查找可用端口..."
+        local new_port=$(get_available_port $((final_port + 1)) 65535)
+        if [[ -z "$new_port" ]]; then
             log_error "未找到可用端口"
             return 1
         fi
-        log_info "使用端口: $port"
+        final_port=$new_port
+        log_info "使用端口: $final_port"
     fi
     
-    # 创建自签证书
-    local cert_info=$(create_self_signed_cert "/usr/local/etc/sing-box/certs" "bing.com" 3650)
-    local cert_file=$(echo "$cert_info" | cut -d':' -f1)
-    local key_file=$(echo "$cert_info" | cut -d':' -f2)
+    # 询问伪装域名配置
+    echo ""
+    echo -e "${COLOR_CYAN}══════════════════════════════════════════════════════${COLOR_RESET}"
+    echo -e "  ${COLOR_GREEN}伪装域名配置${COLOR_RESET}"
+    echo -e "${COLOR_CYAN}══════════════════════════════════════════════════════${COLOR_RESET}"
+    echo -e "  默认伪装域名: ${COLOR_YELLOW}bing.com${COLOR_RESET}"
+    echo -e "  ${COLOR_BLUE}伪装域名用于 HTTP/3 流量混淆${COLOR_RESET}"
+    read -rp "  请输入伪装域名 (直接回车使用默认): " HY2_SNI_INPUT
+    
+    # 如果用户输入了伪装域名，使用用户输入的，否则使用默认值
+    local final_sni="${HY2_SNI_INPUT:-bing.com}"
+    
+    if [[ -z "$final_sni" ]]; then
+        log_error "伪装域名不能为空，使用默认值 bing.com"
+        final_sni="bing.com"
+    fi
+    
+    # 询问是否启用混淆
+    echo ""
+    echo -e "${COLOR_CYAN}══════════════════════════════════════════════════════${COLOR_RESET}"
+    echo -e "  ${COLOR_GREEN}混淆配置${COLOR_RESET}"
+    echo -e "${COLOR_CYAN}══════════════════════════════════════════════════════${COLOR_RESET}"
+    echo -e "  混淆可以进一步增强流量隐蔽性"
+    read -rp "  是否启用混淆? (y/N): " enable_obfs
+    
+    local obfs_config=""
+    if [[ "$enable_obfs" =~ ^[Yy]$ ]]; then
+        obfs_config=$(cat << EOF
+,
+"obfs": {
+    "type": "salamander",
+    "salamander": {
+        "password": "${obfs_password}"
+    }
+}
+EOF
+)
+        log_info "混淆已启用，混淆密码: $obfs_password"
+    fi
+    
+    echo ""
+    echo -e "${COLOR_CYAN}══════════════════════════════════════════════════════${COLOR_RESET}"
+    echo -e "  ${COLOR_GREEN}配置确认${COLOR_RESET}"
+    echo -e "${COLOR_CYAN}══════════════════════════════════════════════════════${COLOR_RESET}"
+    echo -e "  端口: ${COLOR_YELLOW}$final_port${COLOR_RESET}"
+    echo -e "  伪装域名: ${COLOR_YELLOW}$final_sni${COLOR_RESET}"
+    echo -e "  混淆: ${COLOR_YELLOW}$([[ "$enable_obfs" =~ ^[Yy]$ ]] && echo "启用" || echo "禁用")${COLOR_RESET}"
+    echo ""
+    read -rp "  确认安装? (y/N): " confirm
+    if [[ ! "$confirm" =~ ^[Yy]$ ]]; then
+        log_info "已取消安装"
+        return 0
+    fi
     
     # 创建 inbound 配置
     local inbound_config=$(cat << EOF
 {
     "type": "hysteria2",
-    "tag": "${HYSTERIA2_TAG}",
+    "tag": "${HY2_TAG}",
     "listen": "::",
-    "listen_port": ${port},
+    "listen_port": ${final_port},
     "users": [
         {
             "password": "${password}"
         }
     ],
-    "masquerade": "${HYSTERIA2_MASQUERADE}",
+    "masquerade": "https://${final_sni}",
     "tls": {
         "enabled": true,
         "alpn": ["h3"],
-        "certificate_path": "${cert_file}",
-        "key_path": "${key_file}"
-    },
-    "obfs": {
-        "type": "salamander",
-        "salamander": {
-            "password": "${obfs_password}"
-        }
-    }
+        "certificate_path": "${PATH_CONFIG}/certs/cert.pem",
+        "key_path": "${PATH_CONFIG}/certs/private.key"
+    }${obfs_config}
 }
 EOF
 )
+    
+    # 创建证书
+    create_selfsigned_cert
     
     # 添加到配置文件
     add_inbound_to_config "$inbound_config"
     
     # 开放防火墙端口
-    open_port "$port" "udp"
+    open_port "$final_port" "udp"
     
     # 保存节点信息
-    save_hysteria2_info "$password" "$obfs_password" "$port" "$cert_file" "$key_file"
+    save_hysteria2_info "$password" "$obfs_password" "$final_port" "$final_sni" "$([[ "$enable_obfs" =~ ^[Yy]$ ]] && echo "yes" || echo "no")"
     
     # 重启服务
     systemctl restart sing-box
@@ -100,36 +161,28 @@ EOF
 hysteria2_uninstall() {
     log_info "正在卸载 Hysteria2 协议..."
     
-    # 从配置文件移除
-    remove_inbound_from_config "hysteria2"
-    
-    # 关闭防火墙端口
-    local port=$(get_protocol_port "hysteria2")
-    if [[ -n "$port" ]]; then
-        close_port "$port" "udp"
+    # 检查是否安装
+    if ! is_protocol_installed "hysteria2"; then
+        log_warn "Hysteria2 协议未安装"
+        return 1
     fi
     
-    # 删除节点信息文件
-    rm -f "/usr/local/etc/sing-box/hysteria2.info"
+    # 获取端口信息
+    local port=$(jq -r '.inbounds[] | select(.tag=="hysteria2-in") | .listen_port' "$PATH_CONFIG_FILE" 2>/dev/null || echo "8443")
+    
+    # 移除 inbound 配置
+    remove_inbound_from_config "hysteria2-in"
+    
+    # 关闭防火墙端口
+    close_port "$port" "udp"
+    
+    # 删除节点信息
+    delete_protocol_info "hysteria2"
     
     # 重启服务
     systemctl restart sing-box
     
     log_info "Hysteria2 协议已卸载"
-}
-
-# ============================================
-# Hysteria2 状态查看
-# ============================================
-hysteria2_status() {
-    if is_protocol_installed "hysteria2"; then
-        local port=$(get_protocol_port "hysteria2")
-        echo -e "${COLOR_GREEN}Hysteria2 协议已安装${COLOR_RESET} (端口: $port)"
-        return 0
-    else
-        echo -e "${COLOR_YELLOW}Hysteria2 协议未安装${COLOR_RESET}"
-        return 1
-    fi
 }
 
 # ============================================
@@ -139,119 +192,75 @@ save_hysteria2_info() {
     local password=$1
     local obfs_password=$2
     local port=$3
-    local cert_file=$4
-    local key_file=$5
+    local sni=$4
+    local obfs_enabled=$5
     
-    cat > "/usr/local/etc/sing-box/hysteria2.info" << EOF
-PASSWORD=${password}
-OBFS_PASSWORD=${obfs_password}
-PORT=${port}
-CERT_FILE=${cert_file}
-KEY_FILE=${key_file}
-MASQUERADE=${HYSTERIA2_MASQUERADE}
+    mkdir -p "$PATH_CONFIG"
+    
+    cat > "$PATH_CONFIG/hysteria2_info.json" << EOF
+{
+    "password": "$password",
+    "obfs_password": "$obfs_password",
+    "port": $port,
+    "sni": "$sni",
+    "obfs_enabled": "$obfs_enabled"
+}
 EOF
     
-    chmod 600 "/usr/local/etc/sing-box/hysteria2.info"
+    log_info "节点信息已保存"
 }
 
 # ============================================
-# 读取 Hysteria2 节点信息
-# ============================================
-read_hysteria2_info() {
-    local info_file="/usr/local/etc/sing-box/hysteria2.info"
-    if [[ -f "$info_file" ]]; then
-        source "$info_file"
-        echo "PASSWORD=${PASSWORD}"
-        echo "OBFS_PASSWORD=${OBFS_PASSWORD}"
-        echo "PORT=${PORT}"
-        echo "CERT_FILE=${CERT_FILE}"
-        echo "KEY_FILE=${KEY_FILE}"
-        echo "MASQUERADE=${MASQUERADE}"
-    fi
-}
-
-# ============================================
-# 显示 Hysteria2 节点信息
+# Hysteria2 节点信息显示
 # ============================================
 hysteria2_show_info() {
     local ipv4=$1
     local ipv6=$2
     
-    # 读取节点信息
-    local info=$(read_hysteria2_info)
-    if [[ -z "$info" ]]; then
-        log_error "无法读取 Hysteria2 节点信息"
+    if [[ ! -f "$PATH_CONFIG/hysteria2_info.json" ]]; then
+        log_warn "未找到 Hysteria2 节点信息"
         return 1
     fi
     
-    eval "$info"
+    local password=$(jq -r '.password' "$PATH_CONFIG/hysteria2_info.json")
+    local obfs_password=$(jq -r '.obfs_password' "$PATH_CONFIG/hysteria2_info.json")
+    local port=$(jq -r '.port' "$PATH_CONFIG/hysteria2_info.json")
+    local sni=$(jq -r '.sni' "$PATH_CONFIG/hysteria2_info.json")
+    local obfs_enabled=$(jq -r '.obfs_enabled' "$PATH_CONFIG/hysteria2_info.json")
     
-    echo ""
-    echo -e "${COLOR_CYAN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${COLOR_RESET}"
-    echo -e "${COLOR_GREEN}协议类型:${COLOR_RESET} Hysteria2"
-    echo -e "${COLOR_GREEN}端口:${COLOR_RESET} ${PORT}"
-    echo -e "${COLOR_GREEN}密码:${COLOR_RESET} ${PASSWORD}"
-    echo -e "${COLOR_GREEN}混淆密码:${COLOR_RESET} ${OBFS_PASSWORD}"
-    echo -e "${COLOR_GREEN}ALPN:${COLOR_RESET} h3"
-    echo -e "${COLOR_GREEN}伪装:${COLOR_RESET} ${MASQUERADE}"
-    echo -e "${COLOR_CYAN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${COLOR_RESET}"
+    echo -e "  ${COLOR_GREEN}端口:${COLOR_RESET} $port"
+    echo -e "  ${COLOR_GREEN}密码:${COLOR_RESET} $password"
+    echo -e "  ${COLOR_GREEN}伪装域名:${COLOR_RESET} $sni"
+    if [[ "$obfs_enabled" == "yes" ]]; then
+        echo -e "  ${COLOR_GREEN}混淆密码:${COLOR_RESET} $obfs_password"
+    fi
     echo ""
     
-    # 生成分享链接
-    echo -e "${COLOR_YELLOW}【分享链接】${COLOR_RESET}"
+    # 生成节点链接
+    echo -e "  ${COLOR_CYAN}节点链接:${COLOR_RESET}"
+    echo ""
+    
+    # 构建混淆参数
+    local obfs_param=""
+    if [[ "$obfs_enabled" == "yes" ]]; then
+        obfs_param="&obfs=salamander&obfs-password=$obfs_password"
+    fi
     
     # IPv4 链接
-    if [[ -n "$ipv4" ]]; then
-        local link_v4="hysteria2://${PASSWORD}@${ipv4}:${PORT}?sni=bing.com&alpn=h3&obfs=salamander&obfs-password=${OBFS_PASSWORD}#Hysteria2-IPv4"
-        echo -e "${COLOR_GREEN}IPv4:${COLOR_RESET}"
-        echo "$link_v4"
+    if [[ -n "$ipv4" && "$ipv4" =~ ^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+        local ipv4_link="hysteria2://${password}@${ipv4}:${port}?sni=${sni}&insecure=0${obfs_param}#Hysteria2-${ipv4}"
+        echo -e "  ${COLOR_YELLOW}IPv4:${COLOR_RESET}"
+        echo -e "  $ipv4_link"
         echo ""
     fi
     
     # IPv6 链接
     if [[ -n "$ipv6" ]]; then
-        local link_v6="hysteria2://${PASSWORD}@[${ipv6}]:${PORT}?sni=bing.com&alpn=h3&obfs=salamander&obfs-password=${OBFS_PASSWORD}#Hysteria2-IPv6"
-        echo -e "${COLOR_GREEN}IPv6:${COLOR_RESET}"
-        echo "$link_v6"
+        local ipv6_link="hysteria2://${password}@${ipv6}:${port}?sni=${sni}&insecure=0${obfs_param}#Hysteria2-${ipv6}"
+        echo -e "  ${COLOR_YELLOW}IPv6:${COLOR_RESET}"
+        echo -e "  $ipv6_link"
         echo ""
     fi
     
-    echo -e "${COLOR_CYAN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${COLOR_RESET}"
-}
-
-# ============================================
-# 生成 Hysteria2 配置片段
-# ============================================
-hysteria2_generate_config() {
-    local password=$(generate_secure_password)
-    local obfs_password=$(generate_obfs_password)
-    local port=$HYSTERIA2_PORT
-    local cert_dir="/usr/local/etc/sing-box/certs"
-    
-    cat << EOF
-{
-    "type": "hysteria2",
-    "tag": "${HYSTERIA2_TAG}",
-    "listen": "::",
-    "listen_port": ${port},
-    "users": [
-        {
-            "password": "${password}"
-        }
-    ],
-    "masquerade": "${HYSTERIA2_MASQUERADE}",
-    "tls": {
-        "enabled": true,
-        "alpn": ["h3"],
-        "certificate_path": "${cert_dir}/cert.pem",
-        "key_path": "${cert_dir}/private.key"
-    },
-    "obfs": {
-        "type": "salamander",
-        "salamander": {
-            "password": "${obfs_password}"
-        }
-    }
-}
-EOF
+    echo -e "  ${COLOR_BLUE}提示: 复制上方链接到客户端导入使用${COLOR_RESET}"
 }
