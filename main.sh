@@ -9,7 +9,8 @@ set -euo pipefail
 
 # 版本信息
 readonly VERSION="1.0.0"
-readonly SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+readonly GITHUB_RAW="https://raw.githubusercontent.com/Kiss8202/All/main"
+readonly GITHUB_REPO="https://github.com/Kiss8202/All"
 
 # 颜色定义
 readonly COLOR_RED='\033[0;31m'
@@ -18,6 +19,49 @@ readonly COLOR_YELLOW='\033[1;33m'
 readonly COLOR_BLUE='\033[0;34m'
 readonly COLOR_CYAN='\033[0;36m'
 readonly COLOR_RESET='\033[0m'
+
+# 检测脚本来源
+detect_source() {
+    if [[ -f "${BASH_SOURCE[0]}" ]] && [[ -d "$(dirname "${BASH_SOURCE[0]}")/modules" ]]; then
+        # 本地运行
+        SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+        return 0
+    else
+        # 从网络运行，下载到临时目录
+        return 1
+    fi
+}
+
+# 安装脚本到临时目录
+install_to_temp() {
+    local temp_dir=$(mktemp -d)
+    cd "$temp_dir"
+    
+    echo -e "${COLOR_GREEN}[INFO]${COLOR_RESET} 正在下载脚本..."
+    
+    # 下载主脚本
+    curl -fsSL "${GITHUB_RAW}/main.sh" -o main.sh
+    
+    # 下载模块
+    mkdir -p modules
+    curl -fsSL "${GITHUB_RAW}/modules/common.sh" -o modules/common.sh
+    curl -fsSL "${GITHUB_RAW}/modules/reality.sh" -o modules/reality.sh
+    curl -fsSL "${GITHUB_RAW}/modules/hysteria2.sh" -o modules/hysteria2.sh
+    
+    # 创建目录
+    mkdir -p config/certs logs
+    
+    echo -e "${COLOR_GREEN}[INFO]${COLOR_RESET} 脚本已准备就绪"
+    
+    # 运行脚本
+    chmod +x main.sh
+    exec ./main.sh
+}
+
+# 如果是网络运行，安装并执行
+if ! detect_source; then
+    install_to_temp
+fi
 
 # 路径配置
 readonly PATH_MODULES="${SCRIPT_DIR}/modules"
@@ -106,9 +150,6 @@ show_install_menu() {
         fi
         protocol_list+=("hysteria2")
         ((idx++))
-        
-        # 预留协议接口（隐藏实现，未来扩展）
-        # 如需添加新协议，在此添加即可
         
         echo ""
         echo -e "  ${COLOR_YELLOW}0.${COLOR_RESET} 返回主菜单"
