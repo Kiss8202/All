@@ -35,6 +35,7 @@ detect_source() {
 # 安装脚本到临时目录
 install_to_temp() {
     local temp_dir=$(mktemp -d)
+    export TMPDIR="$temp_dir"
     cd "$temp_dir"
     
     echo -e "${COLOR_GREEN}[INFO]${COLOR_RESET} 正在下载脚本..."
@@ -570,6 +571,16 @@ uninstall_all() {
         fi
         
         log_info "已完全卸载！系统恢复到安装前状态！"
+        
+        # 删除临时目录（如果是从网络运行的）
+        if [[ -n "$TMPDIR" ]] && [[ -d "$TMPDIR" ]]; then
+            rm -rf "$TMPDIR" 2>/dev/null || true
+        fi
+        
+        # 直接退出，不再返回菜单
+        echo ""
+        echo -e "${COLOR_GREEN}完全卸载完成！${COLOR_RESET}"
+        exit 0
     else
         log_info "已取消卸载操作"
     fi
