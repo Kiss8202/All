@@ -254,8 +254,15 @@ install_singbox() {
             exit 1
         fi
         
-        # 创建服务文件
-        create_systemd_service
+        # 根据系统类型创建服务
+        case "$os_type" in
+            alpine)
+                create_openrc_service
+                ;;
+            debian|redhat|*)
+                create_systemd_service
+                ;;
+        esac
         
         log_info "Sing-box $tag_name 安装成功"
     else
@@ -294,6 +301,80 @@ EOF
     systemctl enable sing-box
     
     log_info "Systemd 服务已创建"
+}
+
+# 创建 OpenRC init script (Alpine 系统)
+create_openrc_service() {
+    local init_file="/etc/init.d/sing-box"
+    
+    cat > "$init_file" << 'EOF'
+#!/sbin/openrc-run
+
+name="sing-box"
+description="Sing-Box Proxy Service"
+command="/usr/local/bin/sing-box"
+command_args="run -c /usr/local/etc/sing-box/config.json"
+command_background=true
+pidfile="/var/run/${RC_SVCNAME}.pid"
+output_log="/var/log/sing-box.log"
+error_log="/var/log/sing-box.err"
+
+depend() {
+    need net
+    after firewall
+}
+
+start_pre() {
+    checkpath --directory --owner root:root --mode 0755 /var/run || return 1
+    checkpath --directory --owner root:root --mode 0755 /var/log || return 1
+}
+EOF
+
+    chmod +x "$init_file"
+    rc-update add sing-box default
+    
+    log_info "OpenRC 服务已创建"
+}
+
+# 停止服务 - 跨平台
+stop_service() {
+    local os_type=$(detect_os)
+    
+    case "$os_type" in
+        alpine)
+            if command -v rc-service &>/dev/null; then
+                rc-service sing-box stop 2>/dev/null || true
+            fi
+            pkill -9 sing-box 2>/dev/null || true
+            ;;
+        *)
+            systemctl stop sing-box 2>/dev/null || true
+            ;;
+    esac
+}
+
+# 启动服务 - 跨平台
+start_service() {
+    local os_type=$(detect_os)
+    local success=false
+    
+    case "$os_type" in
+        alpine)
+            if command -v rc-service &>/dev/null; then
+                rc-service sing-box start 2>/dev/null && success=true
+            fi
+            if [[ "$success" != true ]]; then
+                nohup /usr/local/bin/sing-box run -c /usr/local/etc/sing-box/config.json > /dev/null 2>&1 &
+                sleep 2
+                pgrep -x sing-box > /dev/null && success=true
+            fi
+            ;;
+        *)
+            systemctl start sing-box 2>/dev/null && success=true
+            ;;
+    esac
+    
+    echo "$success"
 }
 
 # ============================================
