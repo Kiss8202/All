@@ -418,38 +418,13 @@ delete_all_nodes() {
 restart_service() {
     log_info "正在重启 Sing-box 服务..."
     
-    # 检测系统类型
-    local os_type=$(detect_os)
-    local success=false
+    # 停止服务
+    stop_service
     
-    case "$os_type" in
-        alpine)
-            # Alpine 使用 OpenRC
-            if command -v rc-service &>/dev/null; then
-                rc-service sing-box restart 2>/dev/null && success=true
-            fi
-            # 如果 OpenRC 失败，尝试手动重启
-            if [[ "$success" != true ]]; then
-                pkill -9 sing-box 2>/dev/null || true
-                sleep 1
-                nohup /usr/local/bin/sing-box run -c /usr/local/etc/sing-box/config.json > /dev/null 2>&1 &
-                sleep 2
-                if pgrep -x sing-box > /dev/null; then
-                    success=true
-                fi
-            fi
-            ;;
-        debian|redhat)
-            # Debian/Ubuntu 使用 systemd
-            systemctl restart sing-box 2>/dev/null && success=true
-            ;;
-        *)
-            # 其他系统，尝试 systemctl
-            systemctl restart sing-box 2>/dev/null && success=true
-            ;;
-    esac
+    # 启动服务
+    local success=$(start_service)
     
-    if [[ "$success" == true ]]; then
+    if [[ "$success" == "true" ]]; then
         log_info "服务重启成功"
     else
         log_error "服务重启失败"
@@ -517,36 +492,15 @@ uninstall_all() {
     if [[ ! "$confirm" =~ ^[Nn]$ ]]; then
         log_info "正在完全卸载..."
         
-        # 检测系统类型
-        local os_type=$(detect_os)
+        # 停止服务
+        stop_service
         
-        # 停止并禁用服务 - 根据系统类型选择正确的方式
-        case "$os_type" in
-            alpine)
-                # Alpine 使用 OpenRC 或直接 kill 进程
-                if command -v rc-service &>/dev/null; then
-                    rc-service sing-box stop 2>/dev/null || true
-                    rc-update del sing-box default 2>/dev/null || true
-                fi
-                # 强制 kill 任何 sing-box 进程
-                pkill -9 sing-box 2>/dev/null || true
-                # 删除 OpenRC init script
-                rm -f /etc/init.d/sing-box
-                ;;
-            debian|redhat)
-                # Debian/Ubuntu 使用 systemd
-                systemctl stop sing-box 2>/dev/null || true
-                systemctl disable sing-box 2>/dev/null || true
-                # 删除 systemd 服务文件
-                rm -f /etc/systemd/system/sing-box.service
-                systemctl daemon-reload
-                ;;
-            *)
-                # 其他系统，尝试通用方法
-                systemctl stop sing-box 2>/dev/null || true
-                pkill -9 sing-box 2>/dev/null || true
-                ;;
-        esac
+        # 清理可能存在的服务文件（兼容两种系统）
+        rm -f /etc/init.d/sing-box
+        rm -f /etc/systemd/system/sing-box.service
+        if command -v systemctl &>/dev/null; then
+            systemctl daemon-reload 2>/dev/null || true
+        fi
         
         # 删除二进制文件
         rm -f /usr/local/bin/sing-box

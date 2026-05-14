@@ -303,37 +303,10 @@ EOF
     log_info "Systemd 服务已创建"
 }
 
-# 创建 OpenRC init script (Alpine 系统)
+# 创建 OpenRC init script (Alpine 系统) - 不再创建，直接管理进程
 create_openrc_service() {
-    local init_file="/etc/init.d/sing-box"
-    
-    cat > "$init_file" << 'EOF'
-#!/sbin/openrc-run
-
-name="sing-box"
-description="Sing-Box Proxy Service"
-command="/usr/local/bin/sing-box"
-command_args="run -c /usr/local/etc/sing-box/config.json"
-command_background=true
-pidfile="/var/run/${RC_SVCNAME}.pid"
-output_log="/var/log/sing-box.log"
-error_log="/var/log/sing-box.err"
-
-depend() {
-    need net
-    after firewall
-}
-
-start_pre() {
-    checkpath --directory --owner root:root --mode 0755 /var/run || return 1
-    checkpath --directory --owner root:root --mode 0755 /var/log || return 1
-}
-EOF
-
-    chmod +x "$init_file"
-    rc-update add sing-box default
-    
-    log_info "OpenRC 服务已创建"
+    log_info "Alpine 系统：使用进程管理模式"
+    # 不创建 OpenRC 服务，直接在需要时启动进程
 }
 
 # 停止服务 - 跨平台
@@ -342,9 +315,10 @@ stop_service() {
     
     case "$os_type" in
         alpine)
-            if command -v rc-service &>/dev/null; then
-                rc-service sing-box stop 2>/dev/null || true
-            fi
+            # Alpine：直接 kill 进程
+            pkill -9 sing-box 2>/dev/null || true
+            # 确保没有遗留进程
+            sleep 0.5
             pkill -9 sing-box 2>/dev/null || true
             ;;
         *)
@@ -360,13 +334,12 @@ start_service() {
     
     case "$os_type" in
         alpine)
-            if command -v rc-service &>/dev/null; then
-                rc-service sing-box start 2>/dev/null && success=true
-            fi
-            if [[ "$success" != true ]]; then
-                nohup /usr/local/bin/sing-box run -c /usr/local/etc/sing-box/config.json > /dev/null 2>&1 &
-                sleep 2
-                pgrep -x sing-box > /dev/null && success=true
+            # Alpine：直接启动进程
+            stop_service
+            nohup /usr/local/bin/sing-box run -c /usr/local/etc/sing-box/config.json > /dev/null 2>&1 &
+            sleep 2
+            if pgrep -x sing-box > /dev/null; then
+                success=true
             fi
             ;;
         *)
