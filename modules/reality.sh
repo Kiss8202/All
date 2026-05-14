@@ -25,9 +25,21 @@ reality_install() {
     # 生成配置参数
     local uuid=$(generate_uuid)
     local keypair=$(generate_reality_keypair)
-    local private_key=$(echo "$keypair" | grep "PrivateKey:" | awk '{print $2}')
-    local public_key=$(echo "$keypair" | grep "PublicKey:" | awk '{print $2}')
+    
+    # 更可靠的提取密钥对方式
+    local private_key=$(echo "$keypair" | grep -E "^PrivateKey:" | head -1 | awk '{print $2}')
+    local public_key=$(echo "$keypair" | grep -E "^PublicKey:" | head -1 | awk '{print $2}')
     local short_id=$(generate_short_id 8)
+    
+    # 确保密钥不为空
+    if [[ -z "$private_key" || -z "$public_key" ]]; then
+        log_error "无法生成 Reality 密钥对！"
+        return 1
+    fi
+    
+    log_info "成功生成 Reality 密钥对"
+    log_info "Private Key: ${private_key:0:10}..."
+    log_info "Public Key: ${public_key:0:10}..."
     
     # 询问端口配置
     echo ""
@@ -82,7 +94,7 @@ reality_install() {
     echo -e "  端口: ${COLOR_YELLOW}$final_port${COLOR_RESET}"
     echo -e "  伪装域名: ${COLOR_YELLOW}$final_sni${COLOR_RESET}"
     echo ""
-    read -rp "  确认安装? (y/N): " confirm
+    read -rp "  确认安装? (y/n): " confirm
     if [[ ! "$confirm" =~ ^[Yy]$ ]]; then
         log_info "已取消安装"
         return 0

@@ -470,13 +470,20 @@ uninstall_all() {
     echo "╚══════════════════════════════════════════════════════════════╝"
     echo -e "${COLOR_RESET}"
     
-    echo -e "  ${COLOR_YELLOW}此操作将完全卸载 Sing-box 及所有配置！${COLOR_RESET}"
+    echo -e "  ${COLOR_YELLOW}此操作将完全删除所有文件！${COLOR_RESET}"
+    echo ""
+    echo -e "  将删除："
+    echo -e "    - Sing-box 程序文件"
+    echo -e "    - Sing-box 配置文件"
+    echo -e "    - 所有证书"
+    echo -e "    - sb 快捷命令"
+    echo -e "    - 脚本相关的所有文件夹"
     echo ""
     
     read -rp "  确认完全卸载? (y/n): " confirm
     
     if [[ "$confirm" =~ ^[Yy]$ ]]; then
-        log_info "正在卸载 Sing-box..."
+        log_info "正在完全卸载..."
         
         # 停止并禁用服务
         systemctl stop sing-box 2>/dev/null || true
@@ -489,14 +496,26 @@ uninstall_all() {
         # 删除二进制文件
         rm -f /usr/local/bin/sing-box
         
+        # 删除 sb 快捷命令
+        rm -f /usr/local/bin/sb
+        
         # 删除配置文件
         rm -rf /usr/local/etc/sing-box
-        rm -rf "${PATH_CONFIG}"
+        rm -rf /usr/local/sing-box-node
         
-        # 删除日志
+        # 删除脚本相关的临时目录和配置
+        rm -rf "${PATH_CONFIG}"
         rm -rf "${PATH_LOGS}"
         
-        log_info "Sing-box 已完全卸载"
+        # 删除当前脚本（如果是本地运行）
+        if [[ -f "${BASH_SOURCE[0]}" ]] && [[ -d "$(dirname "${BASH_SOURCE[0]}")/modules" ]]; then
+            local script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+            if [[ "$script_dir" != "/" && "$script_dir" != "/usr" && "$script_dir" != "/etc" ]]; then
+                rm -rf "$script_dir"
+            fi
+        fi
+        
+        log_info "已完全卸载！系统恢复到安装前状态！"
     else
         log_info "已取消卸载操作"
     fi
