@@ -143,6 +143,7 @@ get_singbox_version() {
 
 # 安装 Sing-box
 install_singbox() {
+    local os_type=$(detect_os)
     local arch=$(get_arch)
     local install_dir="/usr/local/bin"
     local config_dir="/usr/local/etc/sing-box"
@@ -164,8 +165,8 @@ install_singbox() {
     
     # 方式2: 使用固定版本（如果API失败）
     if [[ -z "$tag_name" ]]; then
-        log_warn "无法获取最新版本，使用备用版本 v1.12.12"
-        tag_name="v1.12.12"
+        log_warn "无法获取最新版本，使用备用版本 v1.13.11"
+        tag_name="v1.13.11"
     fi
     
     # 文件名里用不带 v 的版本号
@@ -179,13 +180,33 @@ install_singbox() {
         sb_arch="arm64"
     fi
     
-    log_info "正在下载 Sing-box $tag_name ($sb_arch)..."
+    # 根据系统类型选择合适的下载链接
+    # Alpine 使用 musl 版本，Debian 使用 glibc 版本
+    local lib_suffix=""
+    case "$os_type" in
+        alpine)
+            lib_suffix="-musl"
+            log_info "检测到 Alpine 系统，使用 musl 版本"
+            ;;
+        debian)
+            lib_suffix="-glibc"
+            log_info "检测到 Debian/Ubuntu 系统，使用 glibc 版本"
+            ;;
+        *)
+            lib_suffix=""  # 默认使用标准版本
+            log_warn "未知系统类型，使用标准版本"
+            ;;
+    esac
     
-    # 下载地址列表（多个备用）
+    log_info "正在下载 Sing-box $tag_name ($sb_arch) for $os_type..."
+    
+    # 下载地址列表（多个备用）- 根据系统类型选择正确的后缀
     local download_urls=(
+        "https://github.com/SagerNet/sing-box/releases/download/${tag_name}/sing-box-${version}-linux-${sb_arch}${lib_suffix}.tar.gz"
+        "https://download.fastgit.org/SagerNet/sing-box/releases/download/${tag_name}/sing-box-${version}-linux-${sb_arch}${lib_suffix}.tar.gz"
+        "https://ghproxy.com/https://github.com/SagerNet/sing-box/releases/download/${tag_name}/sing-box-${version}-linux-${sb_arch}${lib_suffix}.tar.gz"
+        # 如果特定版本失败，尝试标准版本
         "https://github.com/SagerNet/sing-box/releases/download/${tag_name}/sing-box-${version}-linux-${sb_arch}.tar.gz"
-        "https://download.fastgit.org/SagerNet/sing-box/releases/download/${tag_name}/sing-box-${version}-linux-${sb_arch}.tar.gz"
-        "https://ghproxy.com/https://github.com/SagerNet/sing-box/releases/download/${tag_name}/sing-box-${version}-linux-${sb_arch}.tar.gz"
     )
     
     # 下载并安装
@@ -196,10 +217,17 @@ install_singbox() {
     for url in "${download_urls[@]}"; do
         log_info "尝试从 $url 下载..."
         if curl -fsSL --max-time 60 --connect-timeout 10 "$url" -o sing-box.tar.gz 2>/dev/null; then
-            downloaded=true
-            break
+            # 验证下载的文件
+            if tar -tzf sing-box.tar.gz &>/dev/null; then
+                downloaded=true
+                log_info "下载成功！"
+                break
+            else
+                log_warn "下载的文件无效，尝试下一个源..."
+            fi
+        else
+            log_warn "下载失败，尝试下一个源..."
         fi
-        log_warn "下载失败，尝试下一个源..."
     done
     
     if [[ "$downloaded" == false ]]; then
@@ -208,6 +236,7 @@ install_singbox() {
         log_info "1. 访问 https://github.com/SagerNet/sing-box/releases"
         log_info "2. 下载最新版本并解压"
         log_info "3. 将 sing-box 放到 /usr/local/bin/"
+        log_info "提示：Alpine 系统请下载 *-musl.tar.gz，Debian 系统请下载 *-glibc.tar.gz"
         rm -rf "$tmp_dir"
         exit 1
     fi
