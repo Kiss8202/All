@@ -152,32 +152,65 @@ install_singbox() {
     # 创建目录
     mkdir -p "$install_dir" "$config_dir"
     
-    # 获取最新版本
+    # 获取最新版本 - 使用多种方式
+    local version=""
     log_info "获取 Sing-box 最新版本..."
-    local version=$(curl -fsSL "https://api.github.com/repos/SagerNet/sing-box/releases/latest" | grep -o '"tag_name": "v[^"]*"' | head -1 | awk -F'"' '{print $4}')
     
+    # 方式1: GitHub API
     if [[ -z "$version" ]]; then
-        log_error "无法获取 Sing-box 版本信息"
-        exit 1
+        version=$(curl -fsSL --connect-timeout 10 "https://api.github.com/repos/SagerNet/sing-box/releases/latest" 2>/dev/null | grep -o '"tag_name": "v[^"]*"' | head -1 | awk -F'"' '{print $4}' || true)
+    fi
+    
+    # 方式2: 使用固定版本（如果API失败）
+    if [[ -z "$version" ]]; then
+        log_warn "无法获取最新版本，使用备用版本 v1.8.6"
+        version="v1.8.6"
     fi
     
     # 修复架构名称 (Sing-box 使用 amd64 而非 x86_64)
     local sb_arch="$arch"
     if [[ "$sb_arch" == "x86_64" ]]; then
         sb_arch="amd64"
+    elif [[ "$sb_arch" == "aarch64" ]]; then
+        sb_arch="arm64"
     fi
     
     log_info "正在下载 Sing-box $version ($sb_arch)..."
     
-    # 下载地址
-    local download_url="https://github.com/SagerNet/sing-box/releases/download/${version}/sing-box-${version}-linux-${sb_arch}.tar.gz"
+    # 下载地址列表（多个备用）
+    local download_urls=(
+        "https://github.com/SagerNet/sing-box/releases/download/${version}/sing-box-${version}-linux-${sb_arch}.tar.gz"
+        "https://download.fastgit.org/SagerNet/sing-box/releases/download/${version}/sing-box-${version}-linux-${sb_arch}.tar.gz"
+        "https://ghproxy.com/https://github.com/SagerNet/sing-box/releases/download/${version}/sing-box-${version}-linux-${sb_arch}.tar.gz"
+    )
     
     # 下载并安装
     local tmp_dir=$(mktemp -d)
     cd "$tmp_dir"
     
-    if curl -fsSL "$download_url" -o sing-box.tar.gz; then
-        tar -xzf sing-box.tar.gz
+    local downloaded=false
+    for url in "${download_urls[@]}"; do
+        log_info "尝试从 $url 下载..."
+        if curl -fsSL --max-time 60 --connect-timeout 10 "$url" -o sing-box.tar.gz 2>/dev/null; then
+            downloaded=true
+            break
+        fi
+        log_warn "下载失败，尝试下一个源..."
+    done
+    
+    if [[ "$downloaded" == false ]]; then
+        log_error "所有下载源都失败了，请检查网络连接或手动安装"
+        log_info "手动安装方式: "
+        log_info "1. 访问 https://github.com/SagerNet/sing-box/releases"
+        log_info "2. 下载最新版本并解压"
+        log_info "3. 将 sing-box 放到 /usr/local/bin/"
+        rm -rf "$tmp_dir"
+        exit 1
+    fi
+    
+    # 解压和安装
+    log_info "正在解压..."
+    if tar -xzf sing-box.tar.gz; then
         mv sing-box-*/sing-box "$install_dir/"
         chmod +x "$install_dir/sing-box"
         
@@ -193,7 +226,7 @@ install_singbox() {
         
         log_info "Sing-box $version 安装成功"
     else
-        log_error "Sing-box 下载失败，请检查网络连接"
+        log_error "文件解压失败"
         rm -rf "$tmp_dir"
         exit 1
     fi
