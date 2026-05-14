@@ -309,32 +309,42 @@ EOF
     log_info "Systemd 服务已创建"
 }
 
-# 创建保活机制（Alpine 系统）
+# 创建 OpenRC init script (Alpine 系统)
 create_openrc_service() {
-    log_info "Alpine 系统：设置进程保活..."
+    log_info "Alpine 系统：创建 OpenRC 服务..."
     
-    # 创建监控脚本
-    local monitor_script="/usr/local/bin/sing-box-monitor"
-    cat > "$monitor_script" << 'EOF'
-#!/bin/bash
-# Sing-box 进程监控脚本
+    local init_file="/etc/init.d/sing-box"
+    
+    cat > "$init_file" << 'EOF'
+#!/sbin/openrc-run
 
-if ! pgrep -x sing-box > /dev/null; then
-    echo "$(date): sing-box not running, restarting..." >> /var/log/sing-box-monitor.log
-    nohup /usr/local/bin/sing-box run -c /usr/local/etc/sing-box/config.json > /dev/null 2>&1 &
-fi
+name="sing-box"
+description="Sing-Box Proxy Service"
+command="/usr/local/bin/sing-box"
+command_args="run -c /usr/local/etc/sing-box/config.json"
+command_background="yes"
+# 使用 /tmp 而不是 /var/run，避免 tmpfs 清空问题
+pidfile="/tmp/${RC_SVCNAME}.pid"
+output_log="/var/log/sing-box.log"
+error_log="/var/log/sing-box.err"
+
+depend() {
+    need net
+    after firewall
+}
+
+start_pre() {
+    # 确保必要目录存在
+    checkpath -d -m 0755 -o root:root /var/log
+}
 EOF
-    chmod +x "$monitor_script"
+
+    chmod +x "$init_file"
     
-    # 添加到 cron，每 1 分钟检查一次
-    local cron_job="* * * * * $monitor_script"
-    # 检查是否已有这个 cron job
-    if ! crontab -l 2>/dev/null | grep -q "sing-box-monitor"; then
-        (crontab -l 2>/dev/null; echo "$cron_job") | crontab -
-        log_info "已添加进程监控（每分钟检查）"
-    fi
+    # 添加到默认运行级别
+    rc-update add sing-box default
     
-    log_info "Alpine 系统保活机制已设置"
+    log_info "OpenRC 服务已创建"
 }
 
 # 停止服务 - 跨平台
@@ -343,8 +353,10 @@ stop_service() {
     
     case "$os_type" in
         alpine)
-            # Alpine：直接 kill 进程
-            pkill -9 sing-box 2>/dev/null || true
+            # Alpine：优先使用 OpenRC
+            if command -v rc-service &>/dev/null; then
+                rc-service sing-box stop 2>/dev/null || true
+            fi
             # 确保没有遗留进程
             sleep 0.5
             pkill -9 sing-box 2>/dev/null || true
@@ -362,12 +374,25 @@ start_service() {
     
     case "$os_type" in
         alpine)
-            # Alpine：直接启动进程
-            stop_service
-            nohup /usr/local/bin/sing-box run -c /usr/local/etc/sing-box/config.json > /dev/null 2>&1 &
-            sleep 2
-            if pgrep -x sing-box > /dev/null; then
-                success=true
+            # Alpine：优先使用 OpenRC
+            if command -v rc-service &>/dev/null; then
+                # 尝试多次启动，因为 OpenRC 有时需要多次尝试
+                for i in 1 2 3; do
+                    if rc-service sing-box start 2>/dev/null && rc-service sing-box status 2>/dev/null | grep -q "started"; then
+                        success=true
+                        break
+                    fi
+                    sleep 1
+                done
+            fi
+            # 如果 OpenRC 失败，回退到直接启动
+            if [[ "$success" != true ]]; then
+                stop_service
+                nohup /usr/local/bin/sing-box run -c /usr/local/etc/sing-box/config.json > /dev/null 2>&1 &
+                sleep 2
+                if pgrep -x sing-box > /dev/null; then
+                    success=true
+                fi
             fi
             ;;
         *)
