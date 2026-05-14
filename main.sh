@@ -502,6 +502,14 @@ uninstall_all() {
             systemctl daemon-reload 2>/dev/null || true
         fi
         
+        # 删除保活相关文件（Alpine）
+        rm -f /usr/local/bin/sing-box-monitor
+        # 删除 cron 任务
+        if command -v crontab &>/dev/null; then
+            (crontab -l 2>/dev/null | grep -v "sing-box-monitor") | crontab - 2>/dev/null || true
+        fi
+        rm -f /var/log/sing-box-monitor.log
+        
         # 删除二进制文件
         rm -f /usr/local/bin/sing-box
         

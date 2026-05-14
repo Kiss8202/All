@@ -254,7 +254,7 @@ install_singbox() {
             exit 1
         fi
         
-        # 根据系统类型创建服务
+        # 根据系统类型创建服务/保活机制
         case "$os_type" in
             alpine)
                 create_openrc_service
@@ -263,6 +263,12 @@ install_singbox() {
                 create_systemd_service
                 ;;
         esac
+        
+        # 初始化主配置文件（如尚未存在）
+        init_main_config
+        
+        # 启动服务
+        start_service
         
         log_info "Sing-box $tag_name 安装成功"
     else
@@ -303,10 +309,32 @@ EOF
     log_info "Systemd 服务已创建"
 }
 
-# 创建 OpenRC init script (Alpine 系统) - 不再创建，直接管理进程
+# 创建保活机制（Alpine 系统）
 create_openrc_service() {
-    log_info "Alpine 系统：使用进程管理模式"
-    # 不创建 OpenRC 服务，直接在需要时启动进程
+    log_info "Alpine 系统：设置进程保活..."
+    
+    # 创建监控脚本
+    local monitor_script="/usr/local/bin/sing-box-monitor"
+    cat > "$monitor_script" << 'EOF'
+#!/bin/bash
+# Sing-box 进程监控脚本
+
+if ! pgrep -x sing-box > /dev/null; then
+    echo "$(date): sing-box not running, restarting..." >> /var/log/sing-box-monitor.log
+    nohup /usr/local/bin/sing-box run -c /usr/local/etc/sing-box/config.json > /dev/null 2>&1 &
+fi
+EOF
+    chmod +x "$monitor_script"
+    
+    # 添加到 cron，每 1 分钟检查一次
+    local cron_job="* * * * * $monitor_script"
+    # 检查是否已有这个 cron job
+    if ! crontab -l 2>/dev/null | grep -q "sing-box-monitor"; then
+        (crontab -l 2>/dev/null; echo "$cron_job") | crontab -
+        log_info "已添加进程监控（每分钟检查）"
+    fi
+    
+    log_info "Alpine 系统保活机制已设置"
 }
 
 # 停止服务 - 跨平台
