@@ -78,10 +78,11 @@ hysteria2_install() {
     echo -e "  ${COLOR_GREEN}混淆配置${COLOR_RESET}"
     echo -e "${COLOR_CYAN}══════════════════════════════════════════════════════${COLOR_RESET}"
     echo -e "  混淆可以进一步增强流量隐蔽性"
-    read -rp "  是否启用混淆? (y/N): " enable_obfs
+    read -rp "  是否启用混淆? (Y/n): " enable_obfs
     
     local obfs_config=""
-    if [[ "$enable_obfs" =~ ^[Yy]$ ]]; then
+    # 默认启用混淆，只有明确输入 n 才禁用
+    if [[ "$enable_obfs" =~ ^[Nn]$ ]]; then
         obfs_config=$(cat << EOF
 ,
 "obfs": {
@@ -101,13 +102,10 @@ EOF
     echo -e "${COLOR_CYAN}══════════════════════════════════════════════════════${COLOR_RESET}"
     echo -e "  端口: ${COLOR_YELLOW}$final_port${COLOR_RESET}"
     echo -e "  伪装域名: ${COLOR_YELLOW}$final_sni${COLOR_RESET}"
-    echo -e "  混淆: ${COLOR_YELLOW}$([[ "$enable_obfs" =~ ^[Yy]$ ]] && echo "启用" || echo "禁用")${COLOR_RESET}"
+    echo -e "  混淆: ${COLOR_YELLOW}$([[ "$enable_obfs" =~ ^[Nn]$ ]] && echo "禁用" || echo "启用")${COLOR_RESET}"
     echo ""
-    read -rp "  确认安装? (y/N): " confirm
-    if [[ ! "$confirm" =~ ^[Yy]$ ]]; then
-        log_info "已取消安装"
-        return 0
-    fi
+    read -rp "  确认安装? (Y/n): " confirm
+    [[ ! "$confirm" =~ ^[Nn]$ ]] || { log_info "已取消安装"; return 0; }
     
     # 创建 inbound 配置
     local inbound_config=$(cat << EOF
@@ -145,7 +143,7 @@ EOF
     save_hysteria2_info "$password" "$obfs_password" "$final_port" "$final_sni" "$([[ "$enable_obfs" =~ ^[Yy]$ ]] && echo "yes" || echo "no")"
     
     # 重启服务
-    systemctl restart sing-box
+    restart_service
     
     log_info "Hysteria2 协议安装完成"
     
@@ -180,7 +178,7 @@ hysteria2_uninstall() {
     delete_protocol_info "hysteria2"
     
     # 重启服务
-    systemctl restart sing-box
+    restart_service
     
     log_info "Hysteria2 协议已卸载"
 }

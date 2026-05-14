@@ -348,8 +348,8 @@ show_delete_single_menu() {
     if [[ $idx_choice -ge 0 && $idx_choice -lt ${#protocol_list[@]} ]]; then
         local protocol="${protocol_list[$idx_choice]}"
         
-        read -rp "  确认删除 ${protocol} 节点? (y/N): " confirm
-        if [[ "$confirm" =~ ^[Yy]$ ]]; then
+        read -rp "  确认删除 ${protocol} 节点? (Y/n): " confirm
+        if [[ ! "$confirm" =~ ^[Nn]$ ]]; then
             case "$protocol" in
                 reality)
                     source "${PATH_MODULES}/reality.sh"
@@ -383,11 +383,11 @@ delete_all_nodes() {
     echo -e "  ${COLOR_YELLOW}此操作将删除所有节点配置，不可恢复！${COLOR_RESET}"
     echo ""
     
-    read -rp "  确认删除全部节点? (y/n): " confirm
+    read -rp "  确认删除全部节点? (Y/n): " confirm
     
-    if [[ "$confirm" =~ ^[Yy]$ ]]; then
+    if [[ ! "$confirm" =~ ^[Nn]$ ]]; then
         # 停止服务
-        systemctl stop sing-box 2>/dev/null || true
+        stop_service
         
         # 删除配置文件
         rm -f "$PATH_CONFIG_FILE"
@@ -511,9 +511,9 @@ uninstall_all() {
     echo -e "    - 脚本相关的所有文件夹"
     echo ""
     
-    read -rp "  确认完全卸载? (y/n): " confirm
+    read -rp "  确认完全卸载? (Y/n): " confirm
     
-    if [[ "$confirm" =~ ^[Yy]$ ]]; then
+    if [[ ! "$confirm" =~ ^[Nn]$ ]]; then
         log_info "正在完全卸载..."
         
         # 检测系统类型

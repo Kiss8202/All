@@ -94,11 +94,8 @@ reality_install() {
     echo -e "  端口: ${COLOR_YELLOW}$final_port${COLOR_RESET}"
     echo -e "  伪装域名: ${COLOR_YELLOW}$final_sni${COLOR_RESET}"
     echo ""
-    read -rp "  确认安装? (y/n): " confirm
-    if [[ ! "$confirm" =~ ^[Yy]$ ]]; then
-        log_info "已取消安装"
-        return 0
-    fi
+    read -rp "  确认安装? (Y/n): " confirm
+    [[ ! "$confirm" =~ ^[Nn]$ ]] || { log_info "已取消安装"; return 0; }
     
     # 创建 inbound 配置
     local inbound_config=$(cat << EOF
@@ -140,7 +137,7 @@ EOF
     save_reality_info "$uuid" "$public_key" "$short_id" "$final_port" "$final_sni"
     
     # 重启服务
-    systemctl restart sing-box
+    restart_service
     
     log_info "Reality 协议安装完成"
     
@@ -175,7 +172,7 @@ reality_uninstall() {
     delete_protocol_info "reality"
     
     # 重启服务
-    systemctl restart sing-box
+    restart_service
     
     log_info "Reality 协议已卸载"
 }

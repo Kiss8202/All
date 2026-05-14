@@ -787,10 +787,8 @@ delete_protocol_info() {
 confirm_action() {
     local message="$1"
     echo ""
-    read -rp "$message (y/n): " confirm
-    if [[ "$confirm" =~ ^[Yy]$ ]]; then
-        return 0
-    fi
+    read -rp "$message (Y/n): " confirm
+    [[ ! "$confirm" =~ ^[Nn]$ ]] && return 0
     return 1
 }
 
