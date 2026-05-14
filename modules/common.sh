@@ -144,7 +144,6 @@ get_singbox_version() {
 # 安装 Sing-box
 install_singbox() {
     local arch=$(get_arch)
-    local version="${SINGBOX_VERSION:-latest}"
     local install_dir="/usr/local/bin"
     local config_dir="/usr/local/etc/sing-box"
     
@@ -153,13 +152,25 @@ install_singbox() {
     # 创建目录
     mkdir -p "$install_dir" "$config_dir"
     
-    # 下载地址
-    local download_url
-    if [[ "$version" == "latest" ]]; then
-        download_url="https://github.com/SagerNet/sing-box/releases/latest/download/sing-box-linux-${arch}.tar.gz"
-    else
-        download_url="https://github.com/SagerNet/sing-box/releases/download/${version}/sing-box-linux-${arch}.tar.gz"
+    # 获取最新版本
+    log_info "获取 Sing-box 最新版本..."
+    local version=$(curl -fsSL "https://api.github.com/repos/SagerNet/sing-box/releases/latest" | grep -o '"tag_name": "v[^"]*"' | head -1 | awk -F'"' '{print $4}')
+    
+    if [[ -z "$version" ]]; then
+        log_error "无法获取 Sing-box 版本信息"
+        exit 1
     fi
+    
+    # 修复架构名称 (Sing-box 使用 amd64 而非 x86_64)
+    local sb_arch="$arch"
+    if [[ "$sb_arch" == "x86_64" ]]; then
+        sb_arch="amd64"
+    fi
+    
+    log_info "正在下载 Sing-box $version ($sb_arch)..."
+    
+    # 下载地址
+    local download_url="https://github.com/SagerNet/sing-box/releases/download/${version}/sing-box-${version}-linux-${sb_arch}.tar.gz"
     
     # 下载并安装
     local tmp_dir=$(mktemp -d)
@@ -170,12 +181,19 @@ install_singbox() {
         mv sing-box-*/sing-box "$install_dir/"
         chmod +x "$install_dir/sing-box"
         
+        # 验证安装
+        if ! sing-box version > /dev/null 2>&1; then
+            log_error "Sing-box 安装验证失败"
+            rm -rf "$tmp_dir"
+            exit 1
+        fi
+        
         # 创建服务文件
         create_systemd_service
         
-        log_info "Sing-box 安装成功"
+        log_info "Sing-box $version 安装成功"
     else
-        log_error "Sing-box 下载失败"
+        log_error "Sing-box 下载失败，请检查网络连接"
         rm -rf "$tmp_dir"
         exit 1
     fi
