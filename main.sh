@@ -185,15 +185,6 @@ install_protocol() {
     # 检查 root 权限
     check_root
     
-    # 检查并安装依赖
-    check_and_install_dependencies
-    
-    # 检查并安装 Sing-box
-    if ! check_singbox_installed; then
-        log_info "正在安装 Sing-box..."
-        install_singbox
-    fi
-    
     # 加载对应协议模块并安装
     case "$protocol" in
         reality)
@@ -523,6 +514,10 @@ main() {
     # 创建必要的目录
     mkdir -p "${PATH_CONFIG}/certs" "${PATH_LOGS}"
     
+    # 安装依赖（进入菜单前）
+    log_info "正在检查并安装依赖..."
+    check_and_install_dependencies
+    
     # 主循环
     while true; do
         show_main_menu
@@ -530,6 +525,11 @@ main() {
         
         case "$choice" in
             1)
+                # 菜单1 - 先检测 sing-box 是否安装
+                if ! check_singbox_installed; then
+                    log_warn "Sing-box 未安装，现在开始安装..."
+                    install_singbox
+                fi
                 show_install_menu
                 ;;
             2)
